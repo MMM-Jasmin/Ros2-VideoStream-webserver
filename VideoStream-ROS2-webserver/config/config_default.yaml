@@ -1,0 +1,12 @@
+# Configuration for object detection node
+/video_ros2_webserver:
+  ros__parameters:
+    # print debug output
+    debug: true
+    # rotate images?
+    rotation: 270
+    # image source topic
+    topic: "/camera_left/color/image"
+    # output port
+    port: 7777
+
