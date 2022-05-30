@@ -1,4 +1,7 @@
 #include "webserver_node.hpp"
+#include "Utils.h"
+
+const double ONE_SECOND            = 1000.0; // One second in milliseconds
 
 /**
  * @brief Contructor.
@@ -9,6 +12,12 @@ WebserverNode::WebserverNode(const std::string &name) : Node(name, rclcpp::NodeO
 	this->declare_parameter("debug", false);
 	this->declare_parameter("topic", "");
 	this->declare_parameter("port", 7777);
+	this->declare_parameter("out_width", 1080);
+	this->declare_parameter("out_height", 1920);
+	this->declare_parameter("print_fps", true);
+	this->declare_parameter("FPS_STR", "FPS" );
+	this->declare_parameter("qos_sensor_data", true);
+	this->declare_parameter("qos_history_depth", 10);
 	
 }
 
@@ -18,10 +27,33 @@ WebserverNode::WebserverNode(const std::string &name) : Node(name, rclcpp::NodeO
 void WebserverNode::init() {
 
 	std::string ros_topic;
+	bool qos_sensor_data;
+	int qos_history_depth;
 	this->get_parameter("topic", ros_topic);
+	this->get_parameter("qos_sensor_data", qos_sensor_data);
+	this->get_parameter("qos_history_depth", qos_history_depth);
 
 	int output_port;
 	this->get_parameter("port", output_port);
+	this->get_parameter("out_width", m_out_width);
+	this->get_parameter("out_height", m_out_height);
+	this->get_parameter("rotation", m_rotation);
+	this->get_parameter("FPS_STR", m_FPS_STR );
+	this->get_parameter("print_fps", m_print_fps);
+
+
+	if(qos_sensor_data){
+		std::cout << "using ROS2 qos_sensor_data" << std::endl;
+		m_qos_profile = rclcpp::SensorDataQoS();
+	}
+
+
+	m_qos_profile = m_qos_profile.keep_last(qos_history_depth);
+	m_qos_profile = m_qos_profile.reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE);
+	m_qos_profile = m_qos_profile.durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
+	m_qos_profile = m_qos_profile.deadline(std::chrono::nanoseconds(static_cast<int>(1e9 / 30)));
+	
+	
 
 	// Create mjpeg writer with a choosen port.
 	// TODO maybe parameterize the port ???
@@ -32,7 +64,8 @@ void WebserverNode::init() {
 	m_image_small_subscription = this->create_subscription<sensor_msgs::msg::Image>( ros_topic, m_qos_profile, std::bind(&WebserverNode::imageSmallCallback, this, std::placeholders::_1));
 	//cv::namedWindow(m_window_name_image_small, cv::WINDOW_AUTOSIZE);
 
-
+	m_elapsedTime = 0;
+	m_timer.Start();
 }
 
 
@@ -42,22 +75,21 @@ void WebserverNode::init() {
  */
 void WebserverNode::imageSmallCallback(sensor_msgs::msg::Image::SharedPtr img_msg) {
 
-	int rotation;
-	this->get_parameter("rotation", rotation);
-
 	cv::Size image_size(static_cast<int>(img_msg->width), static_cast<int>(img_msg->height));
 	cv::Mat color_image(image_size, CV_8UC3, (void *)img_msg->data.data(), cv::Mat::AUTO_STEP);
 	
-	if (rotation == 90)
+	if (m_rotation == 90)
 		cv::rotate(color_image, color_image, cv::ROTATE_90_CLOCKWISE);
-	else if (rotation == 180)
+	else if (m_rotation == 180)
 		cv::rotate(color_image, color_image, cv::ROTATE_180);
-	else if (rotation == 270)
+	else if (m_rotation == 270)
 		cv::rotate(color_image, color_image, cv::ROTATE_90_COUNTERCLOCKWISE); 
 
 	//cv::setWindowTitle(m_window_name_image_small, std::to_string(m_loop_duration_image_small));
 	//cv::setWindowTitle(m_window_name, std::to_string(0.0));
-	cv::cvtColor(color_image, color_image, cv::COLOR_RGB2BGR);
+
+	cv::resize(color_image, color_image, Size(m_out_width, m_out_height), INTER_LINEAR);
+	cv::cvtColor(color_image, color_image, cv::COLOR_RGB2BGR); 
 
 	m_mjpeg_writer_ptr->write(color_image);
 	if(!m_webservice_started){
@@ -72,14 +104,49 @@ void WebserverNode::imageSmallCallback(sensor_msgs::msg::Image::SharedPtr img_ms
 
 	//m_loop_duration_image_small = (hires_clock::now() - m_callback_time_image_small).count() / 1e6;
 	//m_callback_time_image_small = hires_clock::now();
+
+	m_frameCnt++;
+	CheckFPS(&m_frameCnt);
 }
 
-/**
- * @brief Declare DepthFusion ros node parameters.
- */
-void WebserverNode::declareNodeParameters()
+void WebserverNode::CheckFPS(uint64_t* pFrameCnt)
+	{
+		m_timer.Stop();
+
+		double itrTime      = m_timer.GetElapsedTimeInMilliSec();
+		double fps;
+
+		m_elapsedTime += itrTime;
+
+		fps = 1000 / (m_elapsedTime / (*pFrameCnt));
+
+		if (m_elapsedTime >= ONE_SECOND)
+		{
+			PrintFPS(fps, itrTime);
+
+			*pFrameCnt    = 0;
+			m_elapsedTime = 0;
+		}
+
+		m_timer.Start();
+	}
+
+void WebserverNode::PrintFPS(const float fps, const float itrTime)
 {
+		
+	std::stringstream str("");
 
+	if (fps == 0.0f)
+			str << string_format("{\"%s\": 0.0}", m_FPS_STR.c_str());
+	else
+		str << string_format("{\"%s\": %.2f, \"lastCurrMSec\": %.2f }", m_FPS_STR.c_str(), fps, itrTime);
 
+	auto message = std_msgs::msg::String();
+	message.data = str.str();
+	//m_fps_publisher->publish(message);
+
+		
+	if (m_print_fps)
+		RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message.data.c_str());
 
 }

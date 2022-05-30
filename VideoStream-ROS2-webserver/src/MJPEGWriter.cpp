@@ -58,7 +58,7 @@ void MJPEGWriter::Listener() {
 void MJPEGWriter::Writer() {
     pthread_mutex_lock(&mutex_writer);
     pthread_mutex_unlock(&mutex_writer);
-    const int milis2wait = 16666;
+    const int milis2wait = 5000;
     while (this->isOpened())
     {
         pthread_mutex_lock(&mutex_client);

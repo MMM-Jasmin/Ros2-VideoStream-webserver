@@ -106,7 +106,7 @@ public:
     MJPEGWriter(int port = 0)
         : sock(INVALID_SOCKET)
         , timeout(TIMEOUT_M)
-        , quality(80)
+        , quality(90)
         , port(port)
     {
         signal(SIGPIPE, SIG_IGN);
