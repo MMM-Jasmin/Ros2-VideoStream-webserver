@@ -1,8 +1,10 @@
 #include "MJPEGWriter.hpp"
 #include <fstream>
-void MJPEGWriter::Listener() {
+void
+MJPEGWriter::Listener()
+{
 
-        // send http header
+	// send http header
     std::string header;
     header += "HTTP/1.0 200 OK\r\n";
     header += "Cache-Control: no-cache\r\n";
@@ -21,7 +23,7 @@ void MJPEGWriter::Listener() {
         struct timeval to = { 0, timeout };
         maxfd = sock + 1;
         if (sock == INVALID_SOCKET){
-                return;
+        	return;
         }
         int sel = select(maxfd, &rread, NULL, NULL, &to);
         if (sel > 0) {
@@ -39,10 +41,10 @@ void MJPEGWriter::Listener() {
                     }
                     maxfd = (maxfd>client ? maxfd : client);
                     pthread_mutex_lock(&mutex_cout);
-                    //cout << "new client " << client << endl;
+                    cout << "new client " << client << endl;
                     char headers[4096] = "\0";
                     int readBytes = _read(client, headers);
-                    //cout << headers;
+                    cout << headers;
                     pthread_mutex_unlock(&mutex_cout);
                     pthread_mutex_lock(&mutex_client);
                     _write(client, header_data, header_size);
@@ -55,10 +57,12 @@ void MJPEGWriter::Listener() {
     }
 }
 
-void MJPEGWriter::Writer() {
+void
+MJPEGWriter::Writer()
+{
     pthread_mutex_lock(&mutex_writer);
     pthread_mutex_unlock(&mutex_writer);
-    const int milis2wait = 5000;
+    const int milis2wait = 16666;
     while (this->isOpened())
     {
         pthread_mutex_lock(&mutex_client);
@@ -102,25 +106,26 @@ void MJPEGWriter::Writer() {
     }
 }
 
-void MJPEGWriter::ClientWrite(clientFrame & cf) {
+void
+MJPEGWriter::ClientWrite(clientFrame & cf)
+{
     stringstream head;
     head << "--mjpegstream\r\nContent-Type: image/jpeg\r\nContent-Length: " << cf.outlen << "\r\n\r\n";
     string string_head = head.str();
     pthread_mutex_lock(&mutex_client);
     _write(cf.client, (char*) string_head.c_str(), string_head.size());
     int n = _write(cf.client, (char*)(cf.outbuf), cf.outlen);
-        if (n < cf.outlen)
-        {
-        std::vector<int>::iterator it;
-        it = find (clients.begin(), clients.end(), cf.client);
-        if (it != clients.end())
-        {
-                //cout << "kill client " << cf.client << endl;
-            std::cout << "{\"STATUS\": \"kill client" << cf.client << " \"}" << std::endl;
-                clients.erase(std::remove(clients.begin(), clients.end(), cf.client));
-                ::shutdown(cf.client, 2);
-        }
-        }
+	if (n < cf.outlen)
+	{
+    	std::vector<int>::iterator it;
+      	it = find (clients.begin(), clients.end(), cf.client);
+      	if (it != clients.end())
+      	{
+      		cerr << "kill client " << cf.client << endl;
+      		clients.erase(std::remove(clients.begin(), clients.end(), cf.client));
+            	::shutdown(cf.client, 2);
+      	}
+	}
     pthread_mutex_unlock(&mutex_client);
     pthread_exit(NULL);
 }

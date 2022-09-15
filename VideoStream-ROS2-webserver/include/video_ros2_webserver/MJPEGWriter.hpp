@@ -14,6 +14,7 @@
 #define ADDRPOINTER  unsigned int*
 #define INVALID_SOCKET -1
 #define SOCKET_ERROR   -1
+#define QUALITY_JPG       80
 #define TIMEOUT_M       200000
 #define NUM_CONNECTIONS 2
 
@@ -54,19 +55,19 @@ class MJPEGWriter{
     {
         if (len < 1) { len = strlen(s); }
         {
-                try
-                {
-                        int retval = ::send(sock, s, len, 0x4000);
-                        return retval;
-                }
-                catch (int e)
-                {
-                        cout << "An exception occurred. Exception Nr. " << e << '\n';
-                }
+        	try
+        	{
+        		int retval = ::send(sock, s, len, 0x4000);
+        		return retval;
+        	}
+        	catch (int e)
+        	{
+        		cout << "An exception occurred. Exception Nr. " << e << '\n';
+        	}
         }
         return -1;
     }
-
+    
     int _read(int socket, char* buffer)
     {
         int result;
@@ -106,8 +107,8 @@ public:
     MJPEGWriter(int port = 0)
         : sock(INVALID_SOCKET)
         , timeout(TIMEOUT_M)
-        , quality(90)
-        , port(port)
+        , quality(QUALITY_JPG)
+	, port(port)
     {
         signal(SIGPIPE, SIG_IGN);
         FD_ZERO(&master);
@@ -115,16 +116,21 @@ public:
         //     open(port);
     }
 
-    ~MJPEGWriter(){ release();}
+    ~MJPEGWriter()
+    {
+        release();
+    }
 
-    bool release() {
+    bool release()
+    {
         if (sock != INVALID_SOCKET)
             shutdown(sock, 2);
         sock = (INVALID_SOCKET);
         return false;
     }
 
-    bool open() {
+    bool open()
+    {
         sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
         SOCKADDR_IN address;
@@ -145,7 +151,8 @@ public:
         return true;
     }
 
-    bool isOpened() {
+    bool isOpened()
+    {
         return sock != INVALID_SOCKET;
     }
 
@@ -156,18 +163,18 @@ public:
     }
 
     void stop(){
-        this->release();
+    	this->release();
         pthread_join(thread_listen, NULL);
         pthread_join(thread_write, NULL);
     }
 
     void write(Mat frame){
-        pthread_mutex_lock(&mutex_writer);
-        if(!frame.empty()){
-                lastFrame.release();
-                lastFrame = frame.clone();
-        }
-        pthread_mutex_unlock(&mutex_writer);
+    	pthread_mutex_lock(&mutex_writer);
+    	if(!frame.empty()){
+    		lastFrame.release();
+    		lastFrame = frame.clone();
+    	}
+    	pthread_mutex_unlock(&mutex_writer);
     }
 
 private:

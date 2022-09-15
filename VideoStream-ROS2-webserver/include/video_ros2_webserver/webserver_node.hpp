@@ -30,6 +30,8 @@ public:
 
 private:
 
+	float m_maxFPS;
+
 	int m_out_width, m_out_height, m_rotation;
 
 	MJPEGWriter* m_mjpeg_writer_ptr;
@@ -52,9 +54,13 @@ private:
 	double m_loop_duration_image_small = 0.0;
 	double m_loop_duration_depth = 0.0;
 
+	cv::Mat m_color_image_for_send, m_color_image_last;
+
 	rclcpp::QoS m_qos_profile = rclcpp::SystemDefaultsQoS();
+	rclcpp::QoS m_qos_profile_sysdef = rclcpp::SystemDefaultsQoS();
 
 	rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr m_image_small_subscription;
+	rclcpp::Publisher<std_msgs::msg::String>::SharedPtr m_fps_publisher 	=	 nullptr;
 
 	void imageSmallCallback(sensor_msgs::msg::Image::SharedPtr img_msg);
 	void PrintFPS(const float fps, const float itrTime);

@@ -72,7 +72,8 @@ int main(int argc, char** argv)
 	//image_node->setExitSignal(&exit_request);
 	webserver_node->init();
 
-	rclcpp::executors::SingleThreadedExecutor executor;
+	//rclcpp::executors::SingleThreadedExecutor executor;
+	rclcpp::executors::MultiThreadedExecutor executor(rclcpp::executor::ExecutorArgs(), 2, false);
 	executor.add_node(webserver_node);
 
 	executor.spin();

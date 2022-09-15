@@ -6,11 +6,13 @@ const double ONE_SECOND            = 1000.0; // One second in milliseconds
 /**
  * @brief Contructor.
  */
-WebserverNode::WebserverNode(const std::string &name) : Node(name, rclcpp::NodeOptions().use_intra_process_comms(true)) {
+WebserverNode::WebserverNode(const std::string &name) : Node(name, rclcpp::NodeOptions().use_intra_process_comms(false)) {
 
 	this->declare_parameter("rotation", 0);
 	this->declare_parameter("debug", false);
 	this->declare_parameter("topic", "");
+	this->declare_parameter("fps_topic", "test/fps");
+	this->declare_parameter("max_fps", 30.0f);
 	this->declare_parameter("port", 7777);
 	this->declare_parameter("out_width", 1080);
 	this->declare_parameter("out_height", 1920);
@@ -26,15 +28,19 @@ WebserverNode::WebserverNode(const std::string &name) : Node(name, rclcpp::NodeO
  */
 void WebserverNode::init() {
 
-	std::string ros_topic;
+	std::string ros_topic, fps_topic;
 	bool qos_sensor_data;
 	int qos_history_depth;
+	int output_port;
+
 	this->get_parameter("topic", ros_topic);
+	this->get_parameter("fps_topic", fps_topic);
 	this->get_parameter("qos_sensor_data", qos_sensor_data);
 	this->get_parameter("qos_history_depth", qos_history_depth);
-
-	int output_port;
 	this->get_parameter("port", output_port);
+	
+	
+	this->get_parameter("max_fps", m_maxFPS);
 	this->get_parameter("out_width", m_out_width);
 	this->get_parameter("out_height", m_out_height);
 	this->get_parameter("rotation", m_rotation);
@@ -49,12 +55,20 @@ void WebserverNode::init() {
 
 
 	m_qos_profile = m_qos_profile.keep_last(qos_history_depth);
+	m_qos_profile = m_qos_profile.lifespan(std::chrono::milliseconds(500));
 	m_qos_profile = m_qos_profile.reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE);
 	m_qos_profile = m_qos_profile.durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
-	m_qos_profile = m_qos_profile.deadline(std::chrono::nanoseconds(static_cast<int>(1e9 / 30)));
-	
 	
 
+	m_qos_profile_sysdef = m_qos_profile_sysdef.keep_last(qos_history_depth);
+	m_qos_profile_sysdef = m_qos_profile_sysdef.lifespan(std::chrono::milliseconds(500));
+	//m_qos_profile_sysdef = m_qos_profile_sysdef.reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE);
+	m_qos_profile_sysdef = m_qos_profile_sysdef.durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
+	//m_qos_profile_sysdef = m_qos_profile_sysdef.reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT );
+	//m_qos_profile = m_qos_profile.reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE);
+	//m_qos_profile = m_qos_profile.durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
+	//m_qos_profile = m_qos_profile.deadline(std::chrono::nanoseconds(static_cast<int>(1e9 / 30)));
+	
 	// Create mjpeg writer with a choosen port.
 	// TODO maybe parameterize the port ???
 	m_mjpeg_writer_ptr = new MJPEGWriter(output_port);
@@ -63,6 +77,8 @@ void WebserverNode::init() {
 
 	m_image_small_subscription = this->create_subscription<sensor_msgs::msg::Image>( ros_topic, m_qos_profile, std::bind(&WebserverNode::imageSmallCallback, this, std::placeholders::_1));
 	//cv::namedWindow(m_window_name_image_small, cv::WINDOW_AUTOSIZE);
+
+	m_fps_publisher    		= this->create_publisher<std_msgs::msg::String>(fps_topic, m_qos_profile_sysdef);
 
 	m_elapsedTime = 0;
 	m_timer.Start();
@@ -75,35 +91,20 @@ void WebserverNode::init() {
  */
 void WebserverNode::imageSmallCallback(sensor_msgs::msg::Image::SharedPtr img_msg) {
 
+	if(!m_color_image_last.empty()){
+		m_color_image_for_send = m_color_image_last;
+		m_mjpeg_writer_ptr->write(m_color_image_for_send);
+		if(!m_webservice_started){
+			m_mjpeg_writer_ptr->start(); //Starts the HTTP Server on the selected port
+			m_webservice_started = true;
+		}	
+	}
+
 	cv::Size image_size(static_cast<int>(img_msg->width), static_cast<int>(img_msg->height));
 	cv::Mat color_image(image_size, CV_8UC3, (void *)img_msg->data.data(), cv::Mat::AUTO_STEP);
 	
-	if (m_rotation == 90)
-		cv::rotate(color_image, color_image, cv::ROTATE_90_CLOCKWISE);
-	else if (m_rotation == 180)
-		cv::rotate(color_image, color_image, cv::ROTATE_180);
-	else if (m_rotation == 270)
-		cv::rotate(color_image, color_image, cv::ROTATE_90_COUNTERCLOCKWISE); 
-
-	//cv::setWindowTitle(m_window_name_image_small, std::to_string(m_loop_duration_image_small));
-	//cv::setWindowTitle(m_window_name, std::to_string(0.0));
-
 	cv::resize(color_image, color_image, Size(m_out_width, m_out_height), INTER_LINEAR);
-	cv::cvtColor(color_image, color_image, cv::COLOR_RGB2BGR); 
-
-	m_mjpeg_writer_ptr->write(color_image);
-	if(!m_webservice_started){
-		m_mjpeg_writer_ptr->start(); //Starts the HTTP Server on the selected port
-		m_webservice_started = true;
-	}
-
-	//imshow(m_window_name_image_small, color_image);
-
-	//if (!(cv::waitKey(1) < 0 && cv::getWindowProperty(m_window_name_image_small, cv::WND_PROP_AUTOSIZE) >= 0))
-	//	rclcpp::shutdown();
-
-	//m_loop_duration_image_small = (hires_clock::now() - m_callback_time_image_small).count() / 1e6;
-	//m_callback_time_image_small = hires_clock::now();
+	cv::cvtColor(color_image, m_color_image_last, cv::COLOR_RGB2BGR); 
 
 	m_frameCnt++;
 	CheckFPS(&m_frameCnt);
@@ -143,7 +144,7 @@ void WebserverNode::PrintFPS(const float fps, const float itrTime)
 
 	auto message = std_msgs::msg::String();
 	message.data = str.str();
-	//m_fps_publisher->publish(message);
+	m_fps_publisher->publish(message);
 
 		
 	if (m_print_fps)
