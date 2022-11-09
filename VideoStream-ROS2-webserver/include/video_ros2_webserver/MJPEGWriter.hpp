@@ -14,7 +14,7 @@
 #define ADDRPOINTER  unsigned int*
 #define INVALID_SOCKET -1
 #define SOCKET_ERROR   -1
-#define QUALITY_JPG       80
+#define QUALITY_JPG       100
 #define TIMEOUT_M       200000
 #define NUM_CONNECTIONS 2
 

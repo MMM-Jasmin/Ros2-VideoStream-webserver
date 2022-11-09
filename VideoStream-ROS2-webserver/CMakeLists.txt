@@ -87,6 +87,9 @@ find_package(camera_interfaces REQUIRED)
 if ($ENV{ROS_DISTRO} STREQUAL "eloquent")
 	target_compile_definitions(${PROJECT_BINARY} PRIVATE ROS_ELOQUENT)
 	target_compile_definitions(${PROJECT_LIBRARY} PRIVATE ROS_ELOQUENT)
+elsif($ENV{ROS_DISTRO} STREQUAL "humble")
+	target_compile_definitions(${PROJECT_BINARY} PRIVATE ROS_HUMBLE)
+	target_compile_definitions(${PROJECT_LIBRARY} PRIVATE ROS_HUMBLE)
 endif ()
 message(STATUS "+==========[ ROS2 ]===========")
 message(STATUS "|  Distribution:\t" $ENV{ROS_DISTRO})
@@ -169,13 +172,13 @@ install(
 ###################
 ## Documentation ##
 ###################
-find_package(Doxygen)
-if(DOXYGEN_FOUND)
-	message(STATUS "Doxygen found")
-	# Prepare doxygen configuration file
-	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
-	# Add doc as target
-	add_custom_target(doc ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
-endif(DOXYGEN_FOUND)
+#find_package(Doxygen)
+#if(DOXYGEN_FOUND)
+#	message(STATUS "Doxygen found")
+#	# Prepare doxygen configuration file
+#	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
+#	# Add doc as target
+#	add_custom_target(doc ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
+#endif(DOXYGEN_FOUND)
 
 ament_package()
